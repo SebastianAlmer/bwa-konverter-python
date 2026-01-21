@@ -1,0 +1,33 @@
+# Data inputs/outputs
+input/
+output/
+testinput/
+testoutput/
+old/
+private/
+
+# File types (report artifacts)
+*.pdf
+*.csv
+*.xlsx
+
+# Allow the published structure template
+!/DATEV Struktur/BWA Export Datei -leer -.csv
+
+# Python caches/venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Editor/OS files
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+*.tmp
