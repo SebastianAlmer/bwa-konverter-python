@@ -64,6 +64,9 @@ COST_LABELS = {
 }
 
 
+HEADER_FILL = "D9D9D9"
+
+
 def normalize_month_token(token: str):
     token = " ".join(token.split())
     token = SEPARATOR_CLEAN_RE.sub(r"\1", token)
@@ -105,6 +108,17 @@ def detect_month_header(text: str):
     if len(ordered) >= 13:
         return ordered[-13:]
     return None
+
+
+def parse_de_amount(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if DE_NUMBER_RE.fullmatch(text) is None:
+        return value
+    return float(text.replace(".", "").replace(",", "."))
 
 
 def parse_rows_from_text(text: str, months):
@@ -184,15 +198,65 @@ def write_csv_table(columns, rows, out_path: Path):
             writer.writerow(row)
 
 
+def format_excel_sheet(ws, columns, numeric_columns, text_columns):
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    header_fill = PatternFill("solid", fgColor=HEADER_FILL)
+    header_font = Font(bold=True)
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    number_format = "#,##0.00"
+    for col_idx, col_name in enumerate(columns, start=1):
+        is_numeric = col_name in numeric_columns
+        max_len = len(str(col_name))
+        for row in ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+            cell = row[0]
+            value = cell.value
+            if is_numeric and isinstance(value, (int, float)):
+                cell.number_format = number_format
+                cell.alignment = Alignment(horizontal="right")
+                display = f"{value:,.2f}"
+            else:
+                cell.alignment = Alignment(horizontal="left")
+                display = "" if value is None else str(value)
+            if display and len(display) > max_len:
+                max_len = len(display)
+        max_width = 60 if col_name in text_columns else 24
+        width = min(max_len + 2, max_width)
+        width = max(width, 8)
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+
 def write_excel_table(columns, rows, out_path: Path):
     try:
         import pandas as pd
     except ImportError as exc:
         raise RuntimeError("Pandas ist nicht installiert. Excel-Ausgabe nicht moeglich.") from exc
 
+    try:
+        import openpyxl  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError("openpyxl ist nicht installiert. Excel-Ausgabe nicht moeglich.") from exc
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    df = pd.DataFrame(rows, columns=columns)
-    df.to_excel(out_path, index=False)
+    excel_rows = []
+    for row in rows:
+        label = row[0]
+        values = [parse_de_amount(value) for value in row[1:]]
+        excel_rows.append([label] + values)
+    df = pd.DataFrame(excel_rows, columns=columns)
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Daten")
+        ws = writer.sheets["Daten"]
+        format_excel_sheet(ws, columns, columns[1:], {"Bezeichnung"})
 
 
 def find_entwicklungsuebersicht_page(pdf):

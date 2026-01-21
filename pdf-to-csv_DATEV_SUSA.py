@@ -33,6 +33,7 @@ COLUMN_BOUNDS = [
     ("Kum Werte Haben", 660, 750),
     ("Saldo", 750, 900),
 ]
+HEADER_FILL = "D9D9D9"
 SUSA_HEADER_RE = re.compile(r"summen\s*(?:-\s*)?und\s*salden", re.IGNORECASE)
 
 
@@ -161,17 +162,64 @@ def write_csv(rows, out_path: Path):
             )
 
 
+def format_excel_sheet(ws, columns, numeric_columns, text_columns):
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    header_fill = PatternFill("solid", fgColor=HEADER_FILL)
+    header_font = Font(bold=True)
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    number_format = "#,##0.00"
+    for col_idx, col_name in enumerate(columns, start=1):
+        is_numeric = col_name in numeric_columns
+        max_len = len(str(col_name))
+        for row in ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+            cell = row[0]
+            value = cell.value
+            if is_numeric and isinstance(value, (int, float)):
+                cell.number_format = number_format
+                cell.alignment = Alignment(horizontal="right")
+                display = f"{value:,.2f}"
+            else:
+                cell.alignment = Alignment(horizontal="left")
+                display = "" if value is None else str(value)
+            if display and len(display) > max_len:
+                max_len = len(display)
+        max_width = 60 if col_name in text_columns else 24
+        width = min(max_len + 2, max_width)
+        width = max(width, 8)
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+
 def write_excel(rows, out_path: Path):
     try:
         import pandas as pd
     except ImportError as exc:
         raise RuntimeError("Pandas ist nicht installiert. Excel-Ausgabe nicht moeglich.") from exc
 
+    try:
+        import openpyxl  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError("openpyxl ist nicht installiert. Excel-Ausgabe nicht moeglich.") from exc
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [name for name, _, _ in COLUMN_BOUNDS]
     df = pd.DataFrame(rows, columns=fieldnames)
     try:
-        df.to_excel(out_path, index=False)
+        with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Daten")
+            ws = writer.sheets["Daten"]
+            numeric_columns = fieldnames[2:]
+            text_columns = {fieldnames[1]}
+            format_excel_sheet(ws, fieldnames, numeric_columns, text_columns)
     except Exception as exc:
         raise RuntimeError(f"Excel-Ausgabe fehlgeschlagen: {exc}") from exc
 
