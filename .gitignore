@@ -16,14 +16,26 @@ private/
 
 # Python caches/venv
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
 .venv/
 venv/
+.python-version
+*.egg-info/
+build/
+dist/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+htmlcov/
+.coverage
+coverage.xml
 
 # Editor/OS files
 .vscode/
+.idea/
 *.code-workspace
 .DS_Store
 Thumbs.db
@@ -31,3 +43,6 @@ Thumbs.db
 # Misc
 *.log
 *.tmp
+.env
+.env.*
+.ipynb_checkpoints/
